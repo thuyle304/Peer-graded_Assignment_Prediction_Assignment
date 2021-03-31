@@ -1,0 +1,91 @@
+---
+title: "Prediction Assignment - Machine learing course"
+author: "ThuyLe"
+date: "3/27/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Synopsis
+#### This documents shows the method to processing the data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants which was collected from the website http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har. The participants were asked to perform barbell lifts correctly and incorrectly in 5 different ways (which was coded in "classe" variable. The purpose of this document is to look for a good way to build the prediction model for manner people did exercise, if it corrects or not. Random forest is the method chosen to do so. 
+
+## Loading the packages and dataset
+#### I make prediction for this project with caret package and random forest package. So loading them is the first step.
+#### There are 2 files of dataset for training and testing, which are downloaded from the link below:
+#### - Trainning dataset: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+#### - Tetsting dataset: https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+```{r}
+library(caret)
+library(ggplot2)
+library(randomForest)
+library(dplyr)
+mydt0 <- read.csv("/Users/thuyle/Downloads/pml-training.csv")
+testing0 <- read.csv("/Users/thuyle/Downloads/pml-testing.csv")
+
+```
+
+## Cleaning and tidying data
+#### Exploring data was made by some function like summary, names
+```{r}
+names(mydt0)
+names(testing0)
+summary(mydt0)
+```
+#### Missing values is an important issue we have to handle. There are many variables with majority of observations in both dataset which are missing. These variables should be removed. However, the preditors in both training and testing data should be the same. So we need to find the common predictors that do not include the missing values in both dataset. At the same time, the dataset includes 160 variables, but not all of them illustrate the data for accelerometers on the belt, forearm, arm, and dumbell. The seven first column are related to the user information, time and equipment. Therefore, we do not need these variavbles as predictor. Seven column should be remove from the dataset before training the data. The processing is conducted by codes below:
+```{r}
+nonnadt <- which(colSums(!is.na(mydt0)) > 1900)
+nonnadt <- names(mydt0)[nonnadt]
+nonnaTest <- which(colSums(!is.na(testing0)) >=20)
+nonnaTest <- names(testing0)[nonnaTest]
+
+intersect <- intersect(nonnaTest, nonnadt)
+intersect <- intersect[-(1:7)]
+mydt <- mydt0[,c(intersect,"classe")]
+testing <- testing0[intersect]
+testing <- mutate(testing, classe="")
+```
+#### AThere are 53 variables left in the processed data after removing all the column filled wiht missing values and the unecessary predictors.
+
+## Training data  
+#### We will split data into 2 parts with the ratio 3/1 for training data and validation data. This allows us to estimate the out of sample error of our predictor. We use the caret package to do so. Set seed first to ensure the reproducibility.
+```{r}
+set.seed(2020)
+trainIn <- createDataPartition(y=mydt$classe, p=0.75, list=FALSE)
+mydt$classe <- as.factor(mydt$classe)
+training <- mydt[trainIn,]
+validation <- mydt[-trainIn,]
+```
+
+#### The "classe" variable is transfered to factor so that we can apply random forest method for training data and build the model. For cross validation, random forest construction already includes subsampling. So, we do not need to do that seperately.
+
+## Build the prediction model
+
+#### Random forest package is used to train the predictors at first:
+```{r}
+model <- randomForest(classe~., data=training, ntree=500)
+print(model)
+
+```
+
+#### As can be seen from the results, the out of bag error estimate is quite low (0.43%)
+
+#### Next, we apply the model to validation dataset and use the confusion matrix function of caret package to obtain the error estimate 
+```{r}
+predictClass <- predict(model, newdata=validation)
+confusionMatrix(predictClass, validation$classe)
+```
+#### The results show that the predictors have low out of sample error rate. 
+
+#### Finally, we predict the manner with testing dataset with the model built above:
+
+```{r}
+testing$problem_id <- testing$classe
+predictManner <- predict(model, newdata=testing)
+as.data.frame(predictManner)
+```
+
+#### The final result is showed in the table above. The order is corresponding to the problem ID in the original testing dataset.
